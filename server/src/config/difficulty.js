@@ -1,0 +1,32 @@
+export const DIFFICULTY = Object.freeze({
+  easy: Object.freeze({
+    suspects: 3,
+    clues: 5,
+    hints: 2,
+    chats: 2,
+    images: 2,
+    cctv: 1,
+    redHerrings: 1,
+    baseScore: 100,
+  }),
+  medium: Object.freeze({
+    suspects: 4,
+    clues: 7,
+    hints: 3,
+    chats: 3,
+    images: 3,
+    cctv: 2,
+    redHerrings: 2,
+    baseScore: 150,
+  }),
+  hard: Object.freeze({
+    suspects: 5,
+    clues: 9,
+    hints: 3,
+    chats: 4,
+    images: 4,
+    cctv: 3,
+    redHerrings: 3,
+    baseScore: 200,
+  }),
+});

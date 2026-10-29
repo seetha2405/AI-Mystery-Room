@@ -1,0 +1,8 @@
+{
+  "name": "ai-mystery-room",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "concurrently \"npm:dev --prefix server\" \"npm:dev --prefix client\"", "build": "npm run build --prefix client", "test": "npm test --prefix server", "lint": "npm run lint --prefix server && npm run lint --prefix client", "format": "prettier --write \"{client,server}/src/**/*.{js,jsx,css}\"" },
+  "devDependencies": { "concurrently": "^9.2.0", "prettier": "^3.6.2" }
+}

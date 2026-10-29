@@ -1,0 +1,48 @@
+.mobile-story-panel {
+  display: none;
+}
+.frame-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  color: #9da4b1;
+  font:
+    7px 'DM Mono',
+    monospace;
+}
+.frame-control input {
+  flex: 1;
+  accent-color: var(--accent);
+  height: 3px;
+}
+@media (max-width: 767px) {
+  .mobile-story-panel {
+    display: block;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .mobile-story-panel h2 {
+    font:
+      500 17px 'Space Grotesk',
+      sans-serif;
+    margin: 0 0 10px;
+  }
+  .mobile-story-panel > p:not(.eyebrow) {
+    font-size: 10px;
+    line-height: 1.75;
+    color: #c2c7d1;
+  }
+  .mobile-story-panel > div {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    color: #9299a7;
+    font:
+      8px 'DM Mono',
+      monospace;
+  }
+  .mobile-story-panel .eyebrow {
+    font-size: 8px;
+  }
+}
