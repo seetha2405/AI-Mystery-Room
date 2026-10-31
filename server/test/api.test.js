@@ -131,18 +131,19 @@ describe('case API flow', () => {
     expect(publicResponse.body.data.evidence[0].clueIds).toContain(
       publicResponse.body.data.clues[0].id,
     );
-    const clueId = publicResponse.body.data.clues[0].id;
+    const initialClueCount = publicResponse.body.data.progress.cluesDiscovered;
+    const clueId = publicResponse.body.data.clues.find((clue) => !clue.discovered).id;
     const firstDiscovery = await request(app)
       .post(`/api/cases/${caseId}/clues/${clueId}/discover`)
       .expect(200);
     expect(firstDiscovery.body.data).toMatchObject({
       clue: { id: clueId },
-      progress: { cluesDiscovered: 1 },
+      progress: { cluesDiscovered: initialClueCount + 1 },
       alreadyDiscovered: false,
     });
     expect(firstDiscovery.body.data.clue.text).toBeTruthy();
     const persistedProgress = await request(app).get(`/api/cases/${caseId}`).expect(200);
-    expect(persistedProgress.body.data.progress.cluesDiscovered).toBe(1);
+    expect(persistedProgress.body.data.progress.cluesDiscovered).toBe(initialClueCount + 1);
     expect(persistedProgress.body.data.clues.find((clue) => clue.id === clueId)).toMatchObject({
       discovered: true,
       text: firstDiscovery.body.data.clue.text,
@@ -151,7 +152,7 @@ describe('case API flow', () => {
       .post(`/api/cases/${caseId}/clues/${clueId}/discover`)
       .expect(200);
     expect(secondDiscovery.body.data.alreadyDiscovered).toBe(true);
-    expect(secondDiscovery.body.data.progress.cluesDiscovered).toBe(1);
+    expect(secondDiscovery.body.data.progress.cluesDiscovered).toBe(initialClueCount + 1);
     await request(app).post(`/api/cases/${caseId}/hints`).expect(200);
     await request(app).post(`/api/cases/${caseId}/hints`).expect(200);
     await request(app).post(`/api/cases/${caseId}/hints`).expect(409);
@@ -161,9 +162,9 @@ describe('case API flow', () => {
       .expect(200);
     expect(accusation.body.data.score).toEqual({
       base: 100,
-      cluePoints: 5,
+      cluePoints: 5 * (initialClueCount + 1),
       hintPenalty: 20,
-      total: 85,
+      total: 80 + 5 * (initialClueCount + 1),
       correct: true,
     });
     await request(app).get(`/api/cases/${caseId}/result`).expect(200);

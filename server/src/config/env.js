@@ -28,12 +28,11 @@ if (!parsed.success) {
   );
   process.exit(1);
 }
-if (parsed.data.NODE_ENV === 'production') {
-  const missing = ['MONGODB_URI', 'GEMINI_API_KEY', 'CLIENT_URL'].filter(
-    (name) => !process.env[name]?.trim(),
-  );
+if (!parsed.data.USE_MOCK_AI) {
+  const required = ['MONGODB_URI', 'GEMINI_API_KEY', 'CLIENT_URL'];
+  const missing = required.filter((name) => !process.env[name]?.trim());
   if (missing.length) {
-    console.error(`Missing required production environment variables: ${missing.join(', ')}`);
+    console.error(`Missing required environment variables: ${missing.join(', ')}`);
     process.exit(1);
   }
 }

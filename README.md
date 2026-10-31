@@ -39,8 +39,8 @@ Server settings are listed in `server/.env.example`:
 
 | Variable | Purpose | Default or example |
 | --- | --- | --- |
-| `PORT` | API listen port; Render supplies this in production | `5000` locally |
-| `NODE_ENV` | Runtime mode; production requires the database URI, Gemini key, and client origin | `development` |
+| `PORT` | API listen port; supplied by some hosts | `5000` locally |
+| `NODE_ENV` | Runtime mode; production requires Gemini configuration unless mock mode is enabled | `development` |
 | `MONGODB_URI` | MongoDB connection string | Local MongoDB example in `.env.example` |
 | `GEMINI_API_KEY` | Server side Gemini credential | Required for production |
 | `GEMINI_TEXT_MODEL` | Main case generation model | `gemini-2.5-flash` |
@@ -48,8 +48,8 @@ Server settings are listed in `server/.env.example`:
 | `GEMINI_IMAGE_MODEL` | Evidence image and CCTV frame model | `gemini-2.5-flash-image` |
 | `GEMINI_TIMEOUT_MS` | Timeout for each Gemini generation request | `120000` |
 | `CLIENT_URL` | Exact allowed browser origin for CORS; trailing slashes are removed | `http://localhost:5173` |
-| `USE_MOCK_AI` | Use the built-in fictional generator locally | `true` |
 | `ENABLE_VIDEO` | Optional video generation flag | `false` |
+| `USE_MOCK_AI` | Use the built-in fictional generator instead of Gemini | `false` in the example; set `true` for a local mock |
 
 Client configuration is in `client/.env.example`:
 
@@ -70,23 +70,30 @@ npm run build --prefix client
 
 The server tests use a mock database and the built-in case fixture; they do not require a live Gemini request. The client lint command checks the client source. The build command creates the Vite production bundle in `client/dist`.
 
-## Deployment
+## Deploy without a credit card
 
 ### MongoDB Atlas
 
-Create a cluster and database user, then allow network access from the backend host. Store the Atlas connection string as `MONGODB_URI` in Render. Keep the username and password private. Verify the connection using the Render service logs and `/api/health` after deployment.
+Create a free Atlas cluster and a database user, then copy the connection string into the backend host's `MONGODB_URI` setting. In Atlas Network Access, allow the backend host's outbound IP addresses when it publishes them. If the host has no fixed egress IP, Atlas may require `0.0.0.0/0`; use a strong database password and keep the URI private.
 
-### Render API
+### Docker server host
 
-Create a web service from this repository using the checked-in `render.yaml`. It sets the root directory to `server`, installs with `npm install`, starts with `node src/index.js`, and checks `/api/health`. Set the unsynchronized values `MONGODB_URI`, `GEMINI_API_KEY`, and `CLIENT_URL` in the Render dashboard. The other model, timeout, mock mode, and runtime values are declared in the blueprint. Render provides `PORT` to the process.
+Choose a free host that builds Docker containers from a GitHub repository. Configure the service with:
 
-Set `CLIENT_URL` to the exact Vercel origin, for example `https://your-project.vercel.app`. The server strips a trailing slash before applying its single-origin CORS rule.
+- Repository root directory: `server`
+- Dockerfile: `Dockerfile`
+- Port: `5000` (the server also reads the host's `PORT` variable)
+- Runtime variables: `PORT`, `NODE_ENV`, `MONGODB_URI`, `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL`, `GEMINI_FALLBACK_MODEL`, `GEMINI_IMAGE_MODEL`, `GEMINI_TIMEOUT_MS`, `CLIENT_URL`, `ENABLE_VIDEO`, and `USE_MOCK_AI`
+
+Use the placeholders in `server/.env.example` as a reference. Set `NODE_ENV=production`, `USE_MOCK_AI=false`, and provide the Atlas URI and Gemini key. Keep secrets in the host's environment settings, never in the repository or client.
 
 ### Vercel client
 
-Import the repository into Vercel and set the project root directory to `client`. Use the Vite framework preset and set `VITE_API_URL` to the deployed Render API origin, without a trailing path. `client/vercel.json` rewrites application routes to `/index.html` so refreshes on case pages work.
+Import the repository into Vercel and set the project root directory to `client`. Use the Vite framework preset and set `VITE_API_URL` to the deployed server origin, without a trailing path. `client/vercel.json` rewrites application routes to `/index.html` so refreshes on case pages work. A production build without `VITE_API_URL` displays a configuration error instead of calling localhost.
 
-After both services are deployed, confirm `/api/health`, create and solve a mystery, inspect clues, request hints, refresh the case page, and confirm the result score. The public case response must not contain the solution or hidden clue classifications.
+After Vercel gives you the final site URL, set the server's `CLIENT_URL` to that exact origin and redeploy the server. Check `https://your-server-host/api/health`, then create and solve a mystery, inspect clues, request hints, refresh the case page, and confirm the result score. The public case response must not contain the solution or hidden clue classifications.
+
+`render.yaml` remains in the repository for anyone who chooses Render; Render is optional for this setup.
 
 ## Privacy and safety
 
