@@ -12,9 +12,14 @@ export function Layout({ children }) {
             AI Mystery <b>Room</b>
           </span>
         </Link>
-        <Link className="nav-link" to="/create">
+        <nav className="nav-actions" aria-label="Main navigation">
+          <Link className="nav-link" to="/cases">
+            Case files
+          </Link>
+          <Link className="nav-link" to="/create">
           New mystery <span aria-hidden="true">↗</span>
-        </Link>
+          </Link>
+        </nav>
       </header>
       {children}
       <footer className="footer">

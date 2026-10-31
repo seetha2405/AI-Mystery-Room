@@ -19,6 +19,13 @@ const stages = [
   'Developing photographs…',
   'Cross-checking alibis…',
 ];
+const aiErrorMessages = {
+  AI_BUSY: 'The AI is busy right now. Please try again in a minute.',
+  AI_TIMEOUT: 'Case generation took too long. Please try again.',
+  AI_AUTH: 'AI generation is not configured correctly. Please contact the app owner.',
+  AI_MODEL: 'The configured AI model is unavailable. Please try again later.',
+  AI_VALIDATION: 'The AI could not build a valid case. Please try a different premise.',
+};
 export default function CreateMystery() {
   const [premise, setPremise] = useState('');
   const [difficulty, setDifficulty] = useState('medium');
@@ -77,7 +84,9 @@ export default function CreateMystery() {
         toast(
           error.code === 'PREMISE_REJECTED'
             ? 'Try a different fictional scenario.'
-            : error.message || 'The AI could not build a fair case. Try rephrasing.',
+            : aiErrorMessages[error.code] ||
+              error.message ||
+              'The AI could not build a fair case. Try rephrasing.',
         );
     } finally {
       window.clearInterval(timer);

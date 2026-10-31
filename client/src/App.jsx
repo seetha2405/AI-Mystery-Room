@@ -5,6 +5,7 @@ import { ToastProvider } from './components/ToastContext.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 const Home = lazy(() => import('./pages/Home.jsx'));
 const CreateMystery = lazy(() => import('./pages/CreateMystery.jsx'));
+const CaseFiles = lazy(() => import('./pages/CaseFiles.jsx'));
 const Investigation = lazy(() => import('./pages/Investigation.jsx'));
 const Accusation = lazy(() => import('./pages/Accusation.jsx'));
 const Results = lazy(() => import('./pages/Results.jsx'));
@@ -25,6 +26,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/create" element={<CreateMystery />} />
+              <Route path="/cases" element={<CaseFiles />} />
               <Route path="/case/:caseId" element={<Investigation />} />
               <Route path="/case/:caseId/accuse" element={<Accusation />} />
               <Route path="/case/:caseId/result" element={<Results />} />

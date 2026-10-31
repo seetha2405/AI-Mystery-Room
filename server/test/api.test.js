@@ -1,10 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { cases, assets } = vi.hoisted(() => ({ cases: new Map(), assets: new Map() }));
+process.env.NODE_ENV = 'test';
+process.env.USE_MOCK_AI = 'true';
 const clone = (value) => (value == null ? value : JSON.parse(JSON.stringify(value)));
 const selectView = (value, projection) => {
   const copy = clone(value);
   if (!copy) return copy;
+  if (Array.isArray(copy)) return copy.map((item) => selectView(item, projection));
   if (projection === '+solution') return copy;
   if (!projection) {
     delete copy.solution;
@@ -17,8 +20,18 @@ const selectView = (value, projection) => {
 };
 const query = (work) => ({
   projection: '',
+  sortOrder: null,
+  maxItems: Infinity,
   select(value) {
     this.projection = value;
+    return this;
+  },
+  sort(value) {
+    this.sortOrder = value;
+    return this;
+  },
+  limit(value) {
+    this.maxItems = value;
     return this;
   },
   then(resolve, reject) {
@@ -31,10 +44,17 @@ const query = (work) => ({
 vi.mock('../src/models/Case.js', () => ({
   CaseModel: {
     create: async (document) => {
-      cases.set(document.caseId, clone(document));
-      return clone(document);
+      const created = { createdAt: new Date().toISOString(), ...clone(document) };
+      cases.set(document.caseId, created);
+      return clone(created);
     },
     findOne: ({ caseId }) => query(() => cases.get(caseId)),
+    find: () =>
+      query(() =>
+        [...cases.values()]
+          .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+          .slice(0, 20),
+      ),
     findOneAndUpdate: (filter, update) =>
       query(() => {
         const doc = cases.get(filter.caseId);
@@ -89,6 +109,11 @@ const { app } = await import('../src/app.js');
 const request = (await import('supertest')).default;
 const validPremise = 'The office ledger vanished during a crowded evening party';
 
+beforeEach(() => {
+  cases.clear();
+  assets.clear();
+});
+
 describe('case API flow', () => {
   it('creates, discovers idempotently, consumes hints, accuses, and reveals the result once', async () => {
     const create = await request(app)
@@ -100,20 +125,62 @@ describe('case API flow', () => {
     const publicResponse = await request(app).get(`/api/cases/${caseId}`).expect(200);
     const dump = JSON.stringify(publicResponse.body);
     expect(dump).not.toContain('solution');
+    expect(dump).not.toContain('kind');
     expect(dump).not.toContain('pointsTo');
     expect(dump).not.toContain('culpritId');
+    expect(publicResponse.body.data.evidence[0].clueIds).toContain(
+      publicResponse.body.data.clues[0].id,
+    );
     const clueId = publicResponse.body.data.clues[0].id;
-    await request(app).post(`/api/cases/${caseId}/clues/${clueId}/discover`).expect(200);
-    expect(
-      (await request(app).post(`/api/cases/${caseId}/clues/${clueId}/discover`).expect(200)).body
-        .data.alreadyDiscovered,
-    ).toBe(true);
+    const firstDiscovery = await request(app)
+      .post(`/api/cases/${caseId}/clues/${clueId}/discover`)
+      .expect(200);
+    expect(firstDiscovery.body.data).toMatchObject({
+      clue: { id: clueId },
+      progress: { cluesDiscovered: 1 },
+      alreadyDiscovered: false,
+    });
+    expect(firstDiscovery.body.data.clue.text).toBeTruthy();
+    const persistedProgress = await request(app).get(`/api/cases/${caseId}`).expect(200);
+    expect(persistedProgress.body.data.progress.cluesDiscovered).toBe(1);
+    expect(persistedProgress.body.data.clues.find((clue) => clue.id === clueId)).toMatchObject({
+      discovered: true,
+      text: firstDiscovery.body.data.clue.text,
+    });
+    const secondDiscovery = await request(app)
+      .post(`/api/cases/${caseId}/clues/${clueId}/discover`)
+      .expect(200);
+    expect(secondDiscovery.body.data.alreadyDiscovered).toBe(true);
+    expect(secondDiscovery.body.data.progress.cluesDiscovered).toBe(1);
     await request(app).post(`/api/cases/${caseId}/hints`).expect(200);
     await request(app).post(`/api/cases/${caseId}/hints`).expect(200);
     await request(app).post(`/api/cases/${caseId}/hints`).expect(409);
-    await request(app).post(`/api/cases/${caseId}/accuse`).send({ suspectId: 's1' }).expect(200);
+    const accusation = await request(app)
+      .post(`/api/cases/${caseId}/accuse`)
+      .send({ suspectId: 's1' })
+      .expect(200);
+    expect(accusation.body.data.score).toEqual({
+      base: 100,
+      cluePoints: 5,
+      hintPenalty: 20,
+      total: 85,
+      correct: true,
+    });
     await request(app).get(`/api/cases/${caseId}/result`).expect(200);
     await request(app).post(`/api/cases/${caseId}/accuse`).send({ suspectId: 's1' }).expect(409);
+  });
+  it('lists the 20 newest cases with only the public summary fields', async () => {
+    await request(app)
+      .post('/api/cases')
+      .field('premise', validPremise)
+      .field('difficulty', 'easy')
+      .expect(201);
+    const response = await request(app).get('/api/cases').expect(200);
+    expect(response.body.data).toHaveLength(1);
+    expect(Object.keys(response.body.data[0]).sort()).toEqual(
+      ['caseId', 'createdAt', 'difficulty', 'status', 'title'].sort(),
+    );
+    expect(JSON.stringify(response.body)).not.toContain('solution');
   });
   it('does not reveal a result before accusation', async () => {
     const create = await request(app)

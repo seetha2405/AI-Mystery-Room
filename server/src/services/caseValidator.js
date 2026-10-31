@@ -67,7 +67,42 @@ const caseSchema = z.object({
 const blocked =
   /\b(murder|murdered|suicide|suicidal|rape|sexual assault|torture|bombing|terrorist|self-harm)\b/i;
 
+function normalizeCaseIds(input) {
+  if (!input || typeof input !== 'object') return input;
+  const normalized = JSON.parse(JSON.stringify(input));
+  const normalize = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value);
+  const normalizeSuspectRef = (value) => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return /^s\d+$/i.test(trimmed) ? trimmed.toLowerCase() : trimmed;
+  };
+
+  normalized.suspects?.forEach((suspect) => {
+    suspect.id = normalize(suspect.id);
+  });
+  normalized.evidence?.forEach((item) => {
+    item.id = normalize(item.id);
+    item.chat?.participants?.forEach((id, index, ids) => {
+      ids[index] = normalizeSuspectRef(id);
+    });
+    item.chat?.messages?.forEach((message) => {
+      message.sender = normalizeSuspectRef(message.sender);
+    });
+  });
+  normalized.clues?.forEach((clue) => {
+    clue.id = normalize(clue.id);
+    clue.evidenceId = normalize(clue.evidenceId);
+    clue.pointsTo = normalize(clue.pointsTo);
+  });
+  if (normalized.solution) {
+    normalized.solution.culpritId = normalize(normalized.solution.culpritId);
+    normalized.solution.keyClueIds = normalized.solution.keyClueIds?.map(normalize);
+  }
+  return normalized;
+}
+
 export function validateCase(input, difficulty, uploadCount = 0) {
+  input = normalizeCaseIds(input);
   if (input?.refusalReason)
     throw new AppError(
       422,
@@ -144,9 +179,11 @@ export function validateCase(input, difficulty, uploadCount = 0) {
   const suspectIds = new Set(c.suspects.map((x) => x.id));
   const evidenceIds = new Set(c.evidence.map((x) => x.id));
   const clueIds = new Set(c.clues.map((x) => x.id));
+  if (c.clues.some((clue) => !evidenceIds.has(clue.evidenceId)))
+    throw new AppError(502, 'INVALID_AI_OUTPUT', 'A clue references missing evidence.');
   if (
     !suspectIds.has(c.solution.culpritId) ||
-    c.clues.some((x) => !evidenceIds.has(x.evidenceId) || !suspectIds.has(x.pointsTo)) ||
+    c.clues.some((x) => !suspectIds.has(x.pointsTo)) ||
     c.solution.keyClueIds.some((id) => !clueIds.has(id))
   )
     throw new AppError(502, 'INVALID_AI_OUTPUT', 'Generated references are inconsistent.');

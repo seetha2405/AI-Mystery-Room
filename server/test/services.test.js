@@ -57,6 +57,21 @@ describe('case validation and public DTO', () => {
       validateCase({ ...good, hints: [{ level: 2, text: 'First hint.' }, good.hints[1]] }, 'easy'),
     ).toThrow();
   });
+  it('normalizes identifiers and rejects clues linked to missing evidence', () => {
+    const fixture = makeMockCase(
+      'A fictional office ledger disappeared during the evening party.',
+      'easy',
+    );
+    const normalized = structuredClone(fixture);
+    normalized.suspects[0].id = ' S1 ';
+    normalized.evidence[0].id = ' E1 ';
+    normalized.clues[0].evidenceId = ' E1 ';
+    expect(validateCase(normalized, 'easy').clues[0].evidenceId).toBe('e1');
+
+    const invalid = structuredClone(fixture);
+    invalid.clues[0].evidenceId = 'missing-evidence';
+    expect(() => validateCase(invalid, 'easy')).toThrow(/missing evidence/i);
+  });
   it('whitelists the public view and withholds secret solution fields before accusation', () => {
     const fixture = makeMockCase(
       'A fictional office ledger disappeared during the evening party.',
@@ -76,5 +91,19 @@ describe('case validation and public DTO', () => {
     expect(serialized).not.toContain('imagePrompt');
     expect(serialized).not.toContain('avatarPrompt');
     expect(publicView.clues.every((clue) => !('text' in clue) && !('kind' in clue))).toBe(true);
+    expect(publicView.evidence.every((item) => Array.isArray(item.clueIds))).toBe(true);
+    const discoveredView = toPublicCase({
+      caseId: 'case-id',
+      difficulty: 'easy',
+      status: 'active',
+      ...fixture,
+      progress: { discoveredClueIds: [fixture.clues[0].id], hintsUsed: 0 },
+    });
+    expect(discoveredView.clues[0]).toEqual({
+      id: fixture.clues[0].id,
+      evidenceId: fixture.clues[0].evidenceId,
+      discovered: true,
+      text: fixture.clues[0].text,
+    });
   });
 });

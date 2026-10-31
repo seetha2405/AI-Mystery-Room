@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { CaseModel } from '../models/Case.js';
 import { AssetModel } from '../models/Asset.js';
+import { env } from '../config/env.js';
 import { generateImage } from './gemini.service.js';
 
 async function createAsset(caseId, prompt, kind) {
@@ -18,6 +19,11 @@ async function createAsset(caseId, prompt, kind) {
       });
       return assetId;
     } catch (error) {
+      console.warn('Gemini image generation attempt failed:', {
+        model: env.GEMINI_IMAGE_MODEL,
+        attempt: attempt + 1,
+        status: error?.status ?? error?.statusCode ?? null,
+      });
       if (attempt === 1) throw error;
     }
   }

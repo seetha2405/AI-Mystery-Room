@@ -17,12 +17,19 @@ api.interceptors.response.use(
     }),
 );
 export async function createCase(form, signal) {
-  return (await api.post('/api/cases', form, { timeout: 90000, signal })).data;
+  return (await api.post('/api/cases', form, { timeout: 390000, signal })).data;
 }
 export async function getCase(id) {
   const res = await api.get(`/api/cases/${id}`);
   // The response interceptor unwraps AxiosResponse, so res.data is the API envelope's data.
   return res.data;
+}
+export async function getCases() {
+  const res = await api.get('/api/cases');
+  return res.data;
+}
+export async function deleteCase(id) {
+  return (await api.delete(`/api/cases/${id}`)).data;
 }
 export async function discoverClue(id, clueId) {
   return (await api.post(`/api/cases/${id}/clues/${clueId}/discover`)).data;

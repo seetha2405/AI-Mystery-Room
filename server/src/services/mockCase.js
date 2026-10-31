@@ -1,9 +1,33 @@
 import { DIFFICULTY } from '../config/difficulty.js';
+import { randomInt } from 'node:crypto';
+
+const FIRST_NAMES = [
+  'Mira', 'Arjun', 'Leela', 'Dev', 'Nikhil', 'Anaya', 'Kabir', 'Rhea', 'Ishaan', 'Tara',
+  'Aarav', 'Meera', 'Vihaan', 'Sana', 'Kian', 'Aditi', 'Neil', 'Zoya', 'Rohan', 'Ira',
+];
+const LAST_NAMES = [
+  'Sen', 'Rao', 'Das', 'Malhotra', 'Bose', 'Kapoor', 'Iyer', 'Shah', 'Mehta', 'Nair',
+  'Banerjee', 'Patel', 'Khan', 'Joshi', 'Menon', 'Chatterjee', 'Kulkarni', 'Sethi', 'Dutta', 'Gill',
+];
+
+function randomNames(count) {
+  const firstNames = [...FIRST_NAMES];
+  const lastNames = [...LAST_NAMES];
+  const names = [];
+  for (let i = 0; i < count; i++) {
+    names.push(
+      `${firstNames.splice(randomInt(firstNames.length), 1)[0]} ${lastNames.splice(randomInt(lastNames.length), 1)[0]}`,
+    );
+  }
+  return names;
+}
+
 export function makeMockCase(premise, difficulty, uploadCount = 0) {
   const cfg = DIFFICULTY[difficulty];
+  const suspectNames = randomNames(cfg.suspects);
   const suspects = Array.from({ length: cfg.suspects }, (_, i) => ({
     id: `s${i + 1}`,
-    name: ['Mira Sen', 'Arjun Rao', 'Leela Das', 'Dev Malhotra', 'Nikhil Bose'][i],
+    name: suspectNames[i],
     role: [
       'Operations lead',
       'Accountant',
@@ -41,7 +65,7 @@ export function makeMockCase(premise, difficulty, uploadCount = 0) {
           participants: ['s1', 's2'],
           messages: [
             {
-              sender: 'Mira Sen',
+              sender: suspects[0].name,
               text: 'I left the folder by the east desk.',
               timestamp: new Date().toISOString(),
             },

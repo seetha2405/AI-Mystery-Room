@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { CaseModel } from '../models/Case.js';
 import { AssetModel } from '../models/Asset.js';
 import { createCaseContent } from '../services/caseGenerator.js';
@@ -93,13 +93,24 @@ casesRouter.post(
         if (item.type === 'upload') item.uploadAssetId = uploadIds[uploadIndex++];
       for (const item of content.evidence)
         if (item.type === 'cctv') item.frameStatus = env.USE_MOCK_AI ? 'failed' : 'pending';
+      for (const item of content.evidence)
+        if (item.type === 'image') item.imageStatus = env.USE_MOCK_AI ? 'failed' : 'pending';
       if (env.USE_MOCK_AI)
         for (const item of content.evidence)
           if (item.imageStatus === 'pending') item.imageStatus = 'failed';
+      const startingClueCount = randomInt(2, 4);
+      const startingClueIds = [...content.clues]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, startingClueCount)
+        .map((clue) => clue.id);
       const doc = await CaseModel.findOneAndUpdate(
         { caseId, status: 'generating' },
         {
-          $set: { ...content, status: 'active', progress: { discoveredClueIds: [], hintsUsed: 0 } },
+          $set: {
+            ...content,
+            status: 'active',
+            progress: { discoveredClueIds: startingClueIds, hintsUsed: 0 },
+          },
         },
         { new: true },
       );
@@ -111,7 +122,10 @@ casesRouter.post(
         );
       if (!env.USE_MOCK_AI)
         void generateCaseImages(caseId).catch((error) =>
-          console.error('Image generation failed:', error.message),
+          console.error('Image generation worker failed:', {
+            name: error?.name || 'Error',
+            code: error?.code || null,
+          }),
         );
       return res
         .status(201)
@@ -121,6 +135,37 @@ casesRouter.post(
       await AssetModel.deleteMany({ caseId });
       throw error;
     }
+  }),
+);
+
+casesRouter.get(
+  '/',
+  asyncHandler(async (_req, res) => {
+    const docs = await CaseModel.find({})
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .select('caseId title difficulty status createdAt');
+    res.json({
+      success: true,
+      data: docs.map(({ caseId, title, difficulty, status, createdAt }) => ({
+        caseId,
+        title,
+        difficulty,
+        status,
+        createdAt,
+      })),
+    });
+  }),
+);
+
+casesRouter.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const caseId = parseId(req.params.id);
+    const deleted = await CaseModel.findOneAndDelete({ caseId });
+    if (!deleted) throw new AppError(404, 'CASE_NOT_FOUND', 'Case not found.');
+    await AssetModel.deleteMany({ caseId });
+    res.json({ success: true, data: { caseId } });
   }),
 );
 
@@ -162,13 +207,23 @@ casesRouter.post(
       throw new AppError(409, 'CASE_ALREADY_SOLVED', 'This case has already been solved.');
     const clue = doc.clues.find((item) => item.id === req.params.clueId);
     if (!clue) throw new AppError(404, 'CLUE_NOT_FOUND', 'Clue not found.');
+    const wasDiscovered = doc.progress.discoveredClueIds.includes(clue.id);
+    const filter = { caseId: doc.caseId, status: 'active' };
+    if (!wasDiscovered) filter['progress.discoveredClueIds'] = { $ne: clue.id };
     const update = await CaseModel.updateOne(
-      { caseId: doc.caseId, status: 'active' },
+      filter,
       { $addToSet: { 'progress.discoveredClueIds': clue.id } },
+      { timestamps: false },
     );
-    if (!update.matchedCount)
-      throw new AppError(409, 'CASE_ALREADY_SOLVED', 'This case has already been solved.');
-    const latest = await CaseModel.findOne({ caseId: doc.caseId }).select('progress');
+    let latest;
+    if (!update.matchedCount) {
+      latest = await CaseModel.findOne({ caseId: doc.caseId }).select('status progress');
+      if (!latest) throw new AppError(404, 'CASE_NOT_FOUND', 'Case not found.');
+      if (latest.status !== 'active')
+        throw new AppError(409, 'CASE_ALREADY_SOLVED', 'This case has already been solved.');
+    } else {
+      latest = await CaseModel.findOne({ caseId: doc.caseId }).select('progress');
+    }
     res.json({
       success: true,
       data: {

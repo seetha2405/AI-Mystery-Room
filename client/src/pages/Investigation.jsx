@@ -22,7 +22,7 @@ const filters = ['All', 'Chats', 'Images', 'CCTV', 'Uploads'];
 const typeIcon = { chat: MessageCircle, image: ImageIcon, cctv: Camera, upload: FileText };
 export default function Investigation() {
   const { caseId } = useParams();
-  const { data, loading, error, refresh } = useCase(caseId);
+  const { data, setData, loading, error, refresh } = useCase(caseId);
   const [activeTab, setActiveTab] = useState('Evidence');
   const [filter, setFilter] = useState('All');
   const [selected, setSelected] = useState(null);
@@ -74,10 +74,20 @@ export default function Investigation() {
     );
   if (data.status === 'solved') return <Navigate to={`/case/${caseId}/result`} replace />;
   const currentEvidence = selected || visibleEvidence[0];
-  const clueFor = (evidenceId) =>
-    data.clues.find((clue) => clue.evidenceId === evidenceId && !clue.discovered);
+  const clueFor = (item) =>
+    data.clues.find(
+      (clue) =>
+        !clue.discovered &&
+        (item.clueIds ? item.clueIds.includes(clue.id) : clue.evidenceId === item.id),
+    );
+  const remainingCluesFor = (item) =>
+    data.clues.filter(
+      (clue) =>
+        !clue.discovered &&
+        (item.clueIds ? item.clueIds.includes(clue.id) : clue.evidenceId === item.id),
+    ).length;
   const inspect = async (item) => {
-    const clue = clueFor(item.id);
+    const clue = clueFor(item);
     if (!clue) {
       toast('Nothing more to find here.');
       return;
@@ -85,6 +95,15 @@ export default function Investigation() {
     setBusy(`clue:${item.id}`);
     try {
       const result = await discoverClue(caseId, clue.id);
+      setData((current) => ({
+        ...current,
+        clues: current.clues.map((item) =>
+          item.id === result.clue.id
+            ? { ...item, discovered: true, text: result.clue.text }
+            : item,
+        ),
+        progress: { ...current.progress, ...result.progress },
+      }));
       toast(
         result.alreadyDiscovered ? 'You already found this clue.' : 'New clue added to your board.',
       );
@@ -100,8 +119,12 @@ export default function Investigation() {
     setBusy('hint');
     try {
       const result = await requestHint(caseId);
+      setData((current) => ({
+        ...current,
+        hints: result.hints,
+        progress: { ...current.progress, hintsUsed: result.hints.used.length },
+      }));
       toast(`Hint ${result.hint.level} added. 10 points used.`);
-      await refresh();
     } catch (e) {
       toast(e.message);
     } finally {
@@ -247,7 +270,12 @@ export default function Investigation() {
             <div className="evidence-list">
               {visibleEvidence.map((item) => {
                 const ItemIcon = typeIcon[item.type];
-                const found = data.clues.some((c) => c.evidenceId === item.id && c.discovered);
+                const associatedIds =
+                  item.clueIds ||
+                  data.clues.filter((clue) => clue.evidenceId === item.id).map((clue) => clue.id);
+                const found = associatedIds.some((id) =>
+                  data.clues.some((clue) => clue.id === id && clue.discovered),
+                );
                 return (
                   <button
                     key={item.id}
@@ -411,22 +439,30 @@ export default function Investigation() {
                   <div className="inspect-row">
                     <span>
                       <Search size={15} />
-                      {clueFor(currentEvidence.id)
+                      {clueFor(currentEvidence)
                         ? 'Inspect this record for a clue'
                         : 'All clues found in this record'}
                     </span>
                     <button
                       className="button button-secondary button-small"
                       disabled={
-                        !clueFor(currentEvidence.id) || busy === `clue:${currentEvidence.id}`
+                        !clueFor(currentEvidence) || busy === `clue:${currentEvidence.id}`
                       }
                       onClick={() => inspect(currentEvidence)}
                     >
                       {busy === `clue:${currentEvidence.id}`
                         ? 'Searching…'
-                        : clueFor(currentEvidence.id)
-                          ? 'Inspect'
-                          : 'Complete'}{' '}
+                        : remainingCluesFor(currentEvidence) === 0
+                          ? 'Complete'
+                          : data.clues.some(
+                                (clue) =>
+                                  clue.discovered &&
+                                  (currentEvidence.clueIds
+                                    ? currentEvidence.clueIds.includes(clue.id)
+                                    : clue.evidenceId === currentEvidence.id),
+                              )
+                            ? `Inspect again (${remainingCluesFor(currentEvidence)} left)`
+                            : 'Inspect'}{' '}
                     </button>
                   </div>
                 </>
